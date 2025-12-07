@@ -3,34 +3,35 @@ name: CD Pipeline
 on:
   push:
     branches: [ "main" ]
-  # Manual trigger option
   workflow_dispatch:
 
 jobs:
   build-docker:
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space-action@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # Build API Service
-      - name: Build API Image
+      # Build Single Unified Image (Used for API, UI, and Worker)
+      - name: Build RAG Image
         uses: docker/build-push-action@v4
         with:
           context: .
           file: Dockerfile
-          target: api
           push: false # Set to true when Docker Hub credentials are configured
-          tags: rag-qiskit-api:latest
-
-      # Build Worker Service
-      - name: Build Worker Image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: Dockerfile
-          target: worker
-          push: false
-          tags: rag-qiskit-worker:latest
+          tags: rag-qiskit:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
