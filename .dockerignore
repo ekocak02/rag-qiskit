@@ -1,0 +1,17 @@
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+.env
+.venv
+/rag
+.idea
+.vscode
+data/
+chroma_data/
+coverage/
+.pytest_cache/
+.dvcignore
+.dvc
+
