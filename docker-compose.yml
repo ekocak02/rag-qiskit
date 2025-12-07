@@ -1,0 +1,113 @@
+services:
+  # 1. API Service (FastAPI)
+
+  rag-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rag-qiskit-api:latest
+    container_name: rag-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - DEVICE=cuda
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - HF_TOKEN=${HF_TOKEN}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/docs" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      chromadb:
+        condition: service_started
+    networks:
+      - rag-network
+    volumes:
+      - hf-cache:/home/appuser/.cache/huggingface
+
+  # 2. UI Service (Gradio)
+  rag-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rag-qiskit-ui:latest
+    container_name: rag-ui
+    restart: unless-stopped
+    command: [ "python", "src/ui/app.py" ]
+    ports:
+      - "7860:7860"
+    environment:
+      - API_URL=http://rag-api:8000
+      - GRADIO_USER=${GRADIO_USER}
+      - GRADIO_PASSWORD=${GRADIO_PASSWORD}
+    depends_on:
+      rag-api:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+  # 3. Data Pipeline Worker (Ingest -> Chunk -> Index)
+  rag-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rag-qiskit-worker:latest
+    container_name: rag-worker
+    command: [ "./entrypoint_pipeline.sh" ]
+    environment:
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - DEVICE=cuda
+      - HF_TOKEN=${HF_TOKEN}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    depends_on:
+      chromadb:
+        condition: service_started
+    networks:
+      - rag-network
+    volumes:
+      - hf-cache:/home/appuser/.cache/huggingface
+      # Bind mount data for persistence and manual file drops
+      - ./data:/app/data
+    profiles:
+      - pipeline # Run manually with: docker compose --profile pipeline up rag-worker
+
+  # 4. Vector Database (ChromaDB)
+  chromadb:
+    image: chromadb/chroma:1.3.5
+    container_name: rag-chromadb
+    restart: always
+    volumes:
+      - chroma-data:/data
+    ports:
+      - "8001:8000"
+    networks:
+      - rag-network
+
+volumes:
+  chroma-data:
+  hf-cache:
+
+
+networks:
+  rag-network:
+    driver: bridge
