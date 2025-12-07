@@ -1,3 +1,8 @@
+Disclaimer
+
+All information is taken from IBM's training and reference documents. 
+If there is a license or copyright issue, please inform me.
+
 # ⚛️ Qiskit RAG Assistant
 
 A robust, containerized **Retrieval-Augmented Generation (RAG)** system designed to answer questions about Quantum Computing and **Qiskit**, powered by **Google Gemini** and a local Vector Database (**ChromaDB**).
