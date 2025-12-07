@@ -7,10 +7,10 @@ from src.ingestion.web_scraper import WebScraper
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("IngestionPipeline")
+
 
 def run_pipeline():
     logger.info("Starting Global Ingestion Pipeline...")
@@ -28,7 +28,7 @@ def run_pipeline():
     logger.info("=== Stage 2: Web Scraper ===")
     try:
         web_scraper = WebScraper()
-        web_scraper.run("urls.txt") 
+        web_scraper.run("urls.txt")
     except Exception as e:
         logger.error(f"Stage 2 Failed: {e}")
 
@@ -50,6 +50,7 @@ def run_pipeline():
 
     elapsed = time.time() - start_time
     logger.info(f"Ingestion Pipeline Completed in {elapsed:.2f} seconds.")
+
 
 if __name__ == "__main__":
     run_pipeline()

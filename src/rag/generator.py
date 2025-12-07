@@ -3,25 +3,32 @@ import logging
 from google import genai
 from typing import List, Dict, Any
 from dotenv import load_dotenv
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+
 class GeminiGenerator:
     """
     Generates answers using Google's gemini-2.5-flash-lite model via the new google-genai SDK.
     """
+
     def __init__(self, model_name: str = "gemini-2.5-flash-lite"):
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             logger.critical("GOOGLE_API_KEY not found in environment variables.")
             raise ValueError("GOOGLE_API_KEY is required.")
-            
+
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
-        
+
         # System instruction to guide the model
         self.system_instruction = """
         You are an expert Qiskit Assistant. 
@@ -35,15 +42,16 @@ class GeminiGenerator:
         """
 
     @retry(
-        retry=retry_if_exception_type(Exception), # Broad exception retry for 429s buried in SDK exceptions
+        retry=retry_if_exception_type(
+            Exception
+        ),  # Broad exception retry for 429s buried in SDK exceptions
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=2, min=4, max=20)
+        wait=wait_exponential(multiplier=2, min=4, max=20),
     )
     def _call_gemini(self, prompt: str):
         """Helper method to call Gemini with retry logic."""
         return self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt
+            model=self.model_name, contents=prompt
         )
 
     def generate_answer(self, query: str, context_chunks: List[Dict[str, Any]]) -> str:
@@ -55,25 +63,25 @@ class GeminiGenerator:
 
         context_str = ""
         prev_group_id = None
-        
+
         for i, chunk in enumerate(context_chunks):
-            meta = chunk.get('metadata', {})
-            version = meta.get('qiskit_version', 'Unknown')
-            source = meta.get('source', 'Unknown')
-            context_path = meta.get('context_path', '')
-            group_id = meta.get('split_group_id')
-            chunk_idx = meta.get('chunk_index', 0)
-            
+            meta = chunk.get("metadata", {})
+            version = meta.get("qiskit_version", "Unknown")
+            source = meta.get("source", "Unknown")
+            context_path = meta.get("context_path", "")
+            group_id = meta.get("split_group_id")
+            chunk_idx = meta.get("chunk_index", 0)
+
             header_str = f"Document {i+1}"
             if group_id:
                 header_str += f" (Part {chunk_idx + 1})"
-                
+
             info_parts = [f"Source: {source}", f"Version: {version}"]
             if context_path:
                 info_parts.append(f"Context: {context_path}")
-                
+
             context_str += f"\n--- {header_str} | {', '.join(info_parts)} ---\n"
-            context_str += chunk.get('content', '')
+            context_str += chunk.get("content", "")
             context_str += "\n"
 
         prompt = f"""
@@ -86,12 +94,12 @@ class GeminiGenerator:
         
         Answer:
         """
-        
+
         try:
             response = self._call_gemini(prompt)
             return response.text
         except Exception as e:
             logger.error(f"Generation failed after retries: {e}", exc_info=True)
             if "429" in str(e):
-                 return "Sorry, I am currently receiving too many requests. Please try again in a few moments."
+                return "Sorry, I am currently receiving too many requests. Please try again in a few moments."
             return f"Sorry, I encountered an error while generating the answer. Error details: {str(e)}"

@@ -11,10 +11,10 @@ from marker.output import text_from_rendered
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
 
 class PDFProcessor:
     """
@@ -22,12 +22,17 @@ class PDFProcessor:
     Includes post-processing to clean noise and extract relevant metadata for LLM/RAG usage.
     """
 
-    def __init__(self, raw_dir: Optional[str] = None, output_dir: Optional[str] = None, device: Optional[str] = None):
+    def __init__(
+        self,
+        raw_dir: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        device: Optional[str] = None,
+    ):
         """
         Initialize the processor with input/output configuration and device selection.
         """
         self.project_root = Path(__file__).resolve().parents[3]
-        
+
         if raw_dir:
             self.raw_dir = Path(raw_dir)
         else:
@@ -40,9 +45,9 @@ class PDFProcessor:
 
         if not self.raw_dir.exists():
             logger.warning(f"Raw directory does not exist: {self.raw_dir}")
-        
+
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         if device:
             os.environ["TORCH_DEVICE"] = device
             logger.info(f"Configured TORCH_DEVICE={device}")
@@ -50,11 +55,11 @@ class PDFProcessor:
             if torch.cuda.is_available():
                 os.environ["TORCH_DEVICE"] = "cuda"
             elif torch.backends.mps.is_available():
-                 os.environ["TORCH_DEVICE"] = "mps"
+                os.environ["TORCH_DEVICE"] = "mps"
             else:
-                 os.environ["TORCH_DEVICE"] = "cpu"
-        
-        self.converter = None 
+                os.environ["TORCH_DEVICE"] = "cpu"
+
+        self.converter = None
 
     def run(self):
         """Sequentially processes all PDF files found in the raw_dir."""
@@ -76,7 +81,7 @@ class PDFProcessor:
                 processed_count += 1
             except Exception as e:
                 logger.error(f"Error processing {pdf_file.name}: {e}")
-        
+
         logger.info(f"DONE: Processed {processed_count}/{len(pdf_files)} files.")
 
     def _load_converter(self):
@@ -96,25 +101,25 @@ class PDFProcessor:
         Processes a single PDF file, cleans the output, and saves the markdown.
         """
         input_path = Path(file_path)
-        
+
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {file_path}")
 
         self._load_converter()
 
         logger.info(f"Processing {input_path.name}...")
-        
+
         try:
             rendered = self.converter(str(input_path))
             full_text, _, _ = text_from_rendered(rendered)
-            
+
             # 1. Extract and Clean Metadata
-            raw_metadata = rendered.metadata if hasattr(rendered, 'metadata') else {}
+            raw_metadata = rendered.metadata if hasattr(rendered, "metadata") else {}
             clean_metadata = self._extract_clean_metadata(raw_metadata, input_path.stem)
-            
+
             # 2. Clean Content Noise
             clean_text = self._clean_content(full_text)
-            
+
             # 3. Save
             output_file = self._save_output(input_path.stem, clean_text, clean_metadata)
             logger.info(f"SUCCESS: Processed file saved to {output_file}")
@@ -124,59 +129,63 @@ class PDFProcessor:
             logger.error(f"Failed to process {input_path.name}. Reason: {e}")
             raise e
 
-    def _extract_clean_metadata(self, raw_meta: Dict[str, Any], default_title: str) -> Dict[str, Any]:
+    def _extract_clean_metadata(
+        self, raw_meta: Dict[str, Any], default_title: str
+    ) -> Dict[str, Any]:
         """
         Extracts only essential metadata (title, language) and discards noise (polygons, stats).
         Prioritizes extraction of the main title from the table of contents.
         """
         clean_meta = {}
-        
+
         # Extract Title from Table of Contents (usually the first entry)
-        toc = raw_meta.get('table_of_contents', [])
+        toc = raw_meta.get("table_of_contents", [])
         title = default_title
-        
+
         if toc and isinstance(toc, list) and len(toc) > 0:
             # Check the first item for a title
             first_entry = toc[0]
-            if isinstance(first_entry, dict) and 'title' in first_entry:
-                title = first_entry['title']
-        
-        clean_meta['title'] = title
-        
+            if isinstance(first_entry, dict) and "title" in first_entry:
+                title = first_entry["title"]
+
+        clean_meta["title"] = title
+
         # Keep other useful but small fields if they exist
-        if 'languages' in raw_meta:
-            clean_meta['languages'] = raw_meta['languages']
-        if 'page_count' in raw_meta:
-            clean_meta['page_count'] = raw_meta['page_count']
-            
+        if "languages" in raw_meta:
+            clean_meta["languages"] = raw_meta["languages"]
+        if "page_count" in raw_meta:
+            clean_meta["page_count"] = raw_meta["page_count"]
+
         return clean_meta
 
     def _clean_content(self, text: str) -> str:
         """
         Removes RAG-irrelevant noise from the markdown text using Regex.
-        
+
         Targets:
         - Internal page links: (#page-0-0)
         - Image placeholders: ![](_page_1_Picture_1.jpeg)
         """
         # 1. Remove image placeholders like ![](_page_1_Picture_1.jpeg)
-        text = re.sub(r'!\[.*?\]\(_page_\d+_.*?\)', '', text)
-        
+        text = re.sub(r"!\[.*?\]\(_page_\d+_.*?\)", "", text)
+
         # 2. Remove internal page reference links like [1](#page-5-0) or just (#page-5-0)
-        text = re.sub(r'\[(.*?)\]\(#page-\d+-\d+\)', r'\1', text)
-        
+        text = re.sub(r"\[(.*?)\]\(#page-\d+-\d+\)", r"\1", text)
+
         # Case B: Standalone page anchors if any remains: (#page-x-y)
-        text = re.sub(r'\(#page-\d+-\d+\)', '', text)
-        
+        text = re.sub(r"\(#page-\d+-\d+\)", "", text)
+
         # 3. Clean up extra newlines created by removals
-        text = re.sub(r'\n{3,}', '\n\n', text)
-        
+        text = re.sub(r"\n{3,}", "\n\n", text)
+
         return text.strip()
 
-    def _save_output(self, filename_stem: str, content: str, metadata: Dict[str, Any]) -> Path:
+    def _save_output(
+        self, filename_stem: str, content: str, metadata: Dict[str, Any]
+    ) -> Path:
         """Saves the processed content with YAML frontmatter."""
         output_file = self.output_dir / f"{filename_stem}.md"
-        
+
         # Prepare metadata header
         meta_header = "---\n"
         for key, value in metadata.items():
@@ -187,8 +196,9 @@ class PDFProcessor:
 
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(meta_header + content)
-            
+
         return output_file
+
 
 if __name__ == "__main__":
     processor = PDFProcessor()

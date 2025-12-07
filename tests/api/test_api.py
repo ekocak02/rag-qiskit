@@ -14,15 +14,16 @@ MOCK_RAG_RESULT = {
         {
             "content": "Doc 1 content",
             "metadata": {"source": "doc1.pdf"},
-            "rerank_score": 0.95
+            "rerank_score": 0.95,
         },
         {
             "content": "Doc 2 content",
             "metadata": {"source": "doc2.py"},
-            "rerank_score": 0.88
-        }
-    ]
+            "rerank_score": 0.88,
+        },
+    ],
 }
+
 
 @pytest.fixture
 def mock_pipeline():
@@ -32,22 +33,25 @@ def mock_pipeline():
     with patch("src.api.main.pipeline", mock_instance):
         yield mock_instance
 
+
 def test_health_check(mock_pipeline):
 
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "healthy", "pipeline_loaded": True}
 
+
 def test_query_endpoint(mock_pipeline):
 
     payload = {"query": "What is Qiskit?"}
     response = client.post("/query", json=payload)
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["answer"] == "This is a test answer."
     assert len(data["sources"]) == 2
     assert data["sources"][0]["metadata"]["source"] == "doc1.pdf"
+
 
 def test_query_no_pipeline():
 
